@@ -9,22 +9,7 @@ I chose Helm over maintaining standalone Kubernetes manifests because it provide
 The solution is designed to run locally on Minikube, kind or another Kubernetes cluster without requiring a cloud provider.
 
 1. Architecture:
-
-flowchart TD
-    Client[API Client]
-    Service[ClusterIP Service]
-    App[InfraStore Pod]
-    Secret[Kubernetes Secret]
-    SA[Dedicated ServiceAccount]
-    Media[(Media PVC)]
-    DB[(Database PVC)]
-
-    Client --> Service
-    Service --> App
-    Secret -. Credentials .-> App
-    SA -. Identity .-> App
-    App --> Media
-    App --> DB
+![Local Kubernetes Architecture](docs/images/local-kubernetes-architecture.png)
 
 Components:
 
@@ -45,6 +30,10 @@ Deployment strategy	RollingUpdate
 
 kuberenetes/
 ├── README.md
+├── docs/
+│   └── images/
+│       ├── local-kubernetes-architecture.png
+│       └── production-kubernetes-architecture.png
 ├── helm/
 │   └── infrastore/
 │       ├── Chart.yaml
@@ -55,9 +44,14 @@ kuberenetes/
 │           ├── service.yaml
 │           ├── pvc.yaml
 │           ├── secret.yaml
-│           └── serviceaccount.yaml
-└── infrastore/
-    └── (original Kubernetes manifests, if retained)
+│           ├── serviceaccount.yaml
+│           ├── hpa.yaml
+│           ├── pdb.yaml
+│           └── ingress.yaml
+├── persistence-test.txt
+├── test-infrastore.txt
+└── test.txt
+
 The Helm chart contains the application deployment and its supporting resources.
 
 3. Design decisions:
@@ -91,15 +85,7 @@ An externally managed Secret using existingSecret.
 A Helm-managed Secret when no external Secret is configured.
 
 For this deployment, I use the external Secret approach to keep credentials out of Helm values.
-Example:
-kubectl create secret generic infrastore-secret \
-  -n infrastore \
-  --from-literal=DJANGO_SUPERUSER_USERNAME=admin \
-  --from-literal=DJANGO_SUPERUSER_PASSWORD \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-The password is prompted interactively.
-In production, I would integrate an external secret manager rather than manually managing credentials.
+Refer to Step 2 in the deployment instructions for the creation command.
 
 ServiceAccount and RBAC
 A dedicated ServiceAccount is created for InfraStore.
@@ -137,6 +123,7 @@ kubectl.
 Helm 3.
 A working StorageClass.
 Check the environment:
+minikube start
 kubectl get nodes
 kubectl get storageclass
 helm version
@@ -146,11 +133,17 @@ kubectl create namespace infrastore \
   --dry-run=client -o yaml | kubectl apply -f -
 
 Step 2 – Create application Secret
+
+read -rsp "Enter admin password: " DJANGO_SUPERUSER_PASSWORD
+echo
+
 kubectl create secret generic infrastore-secret \
   -n infrastore \
   --from-literal=DJANGO_SUPERUSER_USERNAME=admin \
-  --from-literal=DJANGO_SUPERUSER_PASSWORD \
+  --from-literal=DJANGO_SUPERUSER_PASSWORD="$DJANGO_SUPERUSER_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
+
+unset DJANGO_SUPERUSER_PASSWORD
 
 Enter the administrator password when prompted.
 
@@ -198,7 +191,7 @@ curl http://localhost:8000/api/files/ \
 Upload a file:
 curl -X POST http://localhost:8000/api/upload/ \
   -H "Authorization: Token YOUR_TOKEN" \
-  -F "file=@example.txt"
+  -F "file=@persistence-test.txt"
 
 Delete a file:
 curl -X DELETE http://localhost:8000/api/files/1/ \
@@ -219,40 +212,12 @@ Application HTTP response	Verified
 API authentication	Requires valid existing Django credentials
 File upload and deletion	Verified
 Persistence after pod restart	Verified
-The root URL returns HTTP 404, which is expected because the application exposes API endpoints rather than a homepage.
-
-An earlier deployment attempt also demonstrated that an externally managed Secret must exist before the application container can start.
 
 7. Production architecture and future improvements:
 
+![Proposed Production Kubernetes Architecture](docs/images/production-kubernetes-architecture.png)
+
 The current solution is suitable as a local Kubernetes deployment. Before using it in production, I would make the following architectural changes.
-
-flowchart TD
-    Client[API Clients]
-    Ingress[Ingress Controller / TLS]
-    Service[ClusterIP Service]
-
-    subgraph K8s[Kubernetes Cluster]
-        App[InfraStore Replicas]
-        HPA[Horizontal Pod Autoscaler]
-        PDB[Pod Disruption Budget]
-    end
-
-    DB[(Managed PostgreSQL)]
-    Storage[(S3 / Object Storage)]
-    Vault[External Secret Manager]
-    Monitor[Monitoring and Logging]
-
-    Client --> Ingress
-    Ingress --> Service
-    Service --> App
-    HPA -. Scaling .-> App
-    PDB -. Availability .-> App
-    App --> DB
-    App --> Storage
-    Vault -. Credentials .-> App
-    App --> Monitor
-
 Planned improvements
 Area	Current implementation	Production approach
 Application	Single replica	Multiple replicas
@@ -280,6 +245,14 @@ Automated database and file backups.
 Monitoring, alerting and centralized logging.
 CI/CD with Helm validation and deployment rollback.
 
+
+Additional Helm Templates and Validation Scope:
+The Helm chart includes templates for Horizontal Pod Autoscaler (HPA), Pod Disruption Budget (PDB), and Ingress.
+These templates demonstrate how the deployment can be extended for production requirements.
+Due to the limitations of the local Minikube environment, these configurations have not been fully validated.
+They should be tested in a suitable Kubernetes environment with the required metrics provider, Ingress controller and supporting configuration before production use.
+The currently deployed single-replica application, persistent storage, Service and security configurations were validated locally.
+
 8. Operational commands:
 
 View application logs:
@@ -302,28 +275,10 @@ helm uninstall infrastore -n infrastore
 
 PVCs and externally managed Secrets should be reviewed separately before cleanup.
 
-
----
-
- 9. Persistence Verification
-
-Persistence was verified by restarting the InfraStore application pod.
-
-The following checks were performed:
-
-- Restarted the InfraStore application pod.
-- Verified that previously uploaded files were still available.
-- Verified that existing database data remained intact.
-- Confirmed that data persisted across application pod replacement.
-
-Result:
-Persistence verification passed.
-The PersistentVolumeClaims mounted at `/app/media` and `/app/db` successfully retained application data after pod restart.
-
-
 Conclusion:
 
 I used Helm to create a repeatable Kubernetes deployment while keeping application configuration, credentials and persistent storage separate.
 The current implementation provides a working deployment foundation with persistent volumes, external Secret management, a dedicated ServiceAccount, container security controls, resource limits and health probes.
 The most important production improvement is to externalize state before introducing horizontal scaling.
 My approach was to deliver a practical local deployment first, while keeping the architecture ready for a more scalable and secure production environment.
+
