@@ -1,0 +1,44 @@
+{{- if .Values.storage.media.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: {{ include "infrastore.fullname" . }}-media
+  labels:
+    {{- include "infrastore.labels" . | nindent 4 }}
+
+spec:
+  accessModes:
+    - {{ .Values.storage.media.accessMode }}
+
+  resources:
+    requests:
+      storage: {{ .Values.storage.media.size }}
+
+  {{- with .Values.storage.media.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+{{- end }}
+
+{{- if .Values.storage.database.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+
+metadata:
+  name: {{ include "infrastore.fullname" . }}-database
+  labels:
+    {{- include "infrastore.labels" . | nindent 4 }}
+
+spec:
+  accessModes:
+    - {{ .Values.storage.database.accessMode }}
+
+  resources:
+    requests:
+      storage: {{ .Values.storage.database.size }}
+
+  {{- with .Values.storage.database.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}

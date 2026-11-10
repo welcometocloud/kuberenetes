@@ -1,0 +1,22 @@
+apiVersion: v2
+
+name: infrastore
+
+description: >
+  Helm chart for deploying InfraStore REST API
+  on Kubernetes.
+
+type: application
+
+version: 0.1.0
+
+appVersion: "1.0.0"
+
+keywords:
+  - infrastore
+  - django
+  - kubernetes
+  - platform-engineering
+
+maintainers:
+  - name: Platform Engineering

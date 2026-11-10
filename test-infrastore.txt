@@ -1,0 +1,1 @@
+InfraStore Kubernetes Helm integration test
