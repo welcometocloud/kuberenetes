@@ -234,8 +234,8 @@ Why externalize the database and file storage?
 The current application stores its data locally. Simply increasing the replica count would not provide reliable horizontal scalability.
 For production, I would first migrate the database to PostgreSQL and uploaded files to object storage.
 This would allow multiple stateless application pods to serve requests consistently.
-I would also introduce:
 
+I would also introduce:
 NetworkPolicies.
 Restricted RBAC for deployment identities.
 Encryption of Kubernetes Secrets at rest.
@@ -281,4 +281,3 @@ I used Helm to create a repeatable Kubernetes deployment while keeping applicati
 The current implementation provides a working deployment foundation with persistent volumes, external Secret management, a dedicated ServiceAccount, container security controls, resource limits and health probes.
 The most important production improvement is to externalize state before introducing horizontal scaling.
 My approach was to deliver a practical local deployment first, while keeping the architecture ready for a more scalable and secure production environment.
-
